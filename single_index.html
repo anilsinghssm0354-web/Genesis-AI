@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @keyframes wave {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        .animate-wave { animation: wave 1s ease-in-out infinite; }
+        body { background-color: #0e0e11; color: white; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        function App() {
+            const [status, setStatus] = useState('idle');
+            const [isListening, setIsListening] = useState(false);
+            const videoRef = useRef(null);
+            const canvasRef = useRef(null);
+            const streamRef = useRef(null);
+            const [facingMode, setFacingMode] = useState('environment');
+
+            const initCamera = async () => {
+                if (streamRef.current) {
+                    streamRef.current.getTracks().forEach(track => track.stop());
+                }
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode }, 
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+                    });
+                    streamRef.current = stream;
+                    if (videoRef.current) videoRef.current.srcObject = stream;
+                } catch (err) {
+                    console.error("Camera access denied:", err);
+                    alert("Camera access denied.");
+                }
+            };
+
+            useEffect(() => {
+                initCamera();
+                return () => streamRef.current?.getTracks().forEach(track => track.stop());
+            }, [facingMode]);
+
+            const analyzeView = async () => {
+                setStatus('analyzing');
+                const canvas = canvasRef.current;
+                const video = videoRef.current;
+                if (!canvas || !video) return;
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                const base64Image = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+
+                // Note: In a real app, you'd call the Gemini API here.
+                // For this single-file demo, we simulate a response.
+                setTimeout(() => {
+                    const text = "यह एक कैमरा व्यू है।"; // Hindi response
+                    setStatus('speaking');
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'hi-IN';
+                    utterance.onend = () => setStatus('idle');
+                    window.speechSynthesis.speak(utterance);
+                }, 1000);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black flex flex-col">
+                    <video ref={videoRef} autoPlay playsInline muted className="flex-grow object-cover" />
+                    <canvas ref={canvasRef} className="hidden" />
+                    
+                    <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-4">
+                        <div className={`w-20 h-20 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md 
+                            ${isListening ? 'animate-pulse' : ''} 
+                            ${status === 'speaking' ? 'animate-bounce' : ''}`}>
+                            <div className={`text-4xl text-white ${isListening || status === 'speaking' ? 'animate-wave' : ''}`}>✦</div>
+                        </div>
+                        <div className="flex gap-4">
+                            <button onClick={() => setFacingMode(prev => prev === 'user' ? 'environment' : 'user')} className="px-6 py-2 bg-gray-700 text-white rounded-full font-semibold">Switch Camera</button>
+                            <button onClick={analyzeView} className="px-6 py-2 bg-blue-600 text-white rounded-full font-semibold">Ask Genesis</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
